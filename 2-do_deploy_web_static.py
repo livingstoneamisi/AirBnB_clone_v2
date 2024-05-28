@@ -24,7 +24,9 @@ def do_pack():
         local('tar -cvzf {} web_static'.format(archive_path))
         print('web_static packed: {} -> {}'.format(archive_path,
               os.path.getsize(archive_path)))
-    except:
+        return archive_path  # Return the path of the created archive
+    except Exception as e:
+        print(e)
         return None
 
 
@@ -34,19 +36,40 @@ def do_deploy(archive_path):
     '''
     if not os.path.exists(archive_path):
         return False
-    file_name = archive_path.split('/')[1]
-    file_path = '/data/web_static/releases/'
-    releases_path = file_path + file_name[:-4]
+
     try:
-        put(archive_path, '/tmp/')
+        # Extracting file name from path
+        file_name = os.path.basename(archive_path)
+        
+        # Setting up file paths
+        releases_path = '/data/web_static/releases/'
+        current_link_path = '/data/web_static/current'
+
+        # Upload the archive to /tmp/ directory of the web server
+        put(archive_path, '/tmp')
+
+        # Uncompress the archive to releases directory
         run('mkdir -p {}'.format(releases_path))
-        run('tar -xzf /tmp/{} -C {}'.format(file_name, releases_path))
+        run('tar -xzf /tmp/{} -C {}/{}'.format(file_name, releases_path, file_name[:-4]))
+
+        # Delete the archive from the web server
         run('rm /tmp/{}'.format(file_name))
-        run('mv {}/web_static/* {}/'.format(releases_path, releases_path))
-        run('rm -rf {}/web_static'.format(releases_path))
-        run('rm -rf /data/web_static/current')
-        run('ln -s {} /data/web_static/current'.format(releases_path))
+
+        # Move contents of web_static/ into current release folder
+        run('mv {}/{}/web_static/* {}/{}'.format(releases_path, file_name[:-4], releases_path, file_name[:-4]))
+
+        # Delete the web_static/ folder
+        run('rm -rf {}/{}/web_static'.format(releases_path, file_name[:-4]))
+
+        # Delete the symbolic link /data/web_static/current
+        run('rm -rf {}'.format(current_link_path))
+
+        # Create a new symbolic link
+        run('ln -s {}/{} {}'.format(releases_path, file_name[:-4], current_link_path))
+
         print('New version deployed!')
         return True
-    except:
+    except Exception as e:
+        print(e)
         return False
+
